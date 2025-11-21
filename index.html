@@ -2406,10 +2406,20 @@ function getPanelClass(sheet) {
         : "";
     }
 
+    function normalizeAlias(str) {
+      return (str || '')
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+    }
+
     function renderDetail(name) {
-            const qRaw = name || '';
-      const qNorm = normalizeNamaCari(qRaw);
-      let matches = [];
+  const qRaw = name || '';
+  const qNorm = normalizeNamaCari(qRaw);
+  const qAlias = normalizeAlias(qRaw);
+  let matches = [];
+
 
       if (qNorm) {
         matches = DATA.filter(r => normalizeNamaCari(r.nama || '') === qNorm);
@@ -2422,11 +2432,15 @@ function getPanelClass(sheet) {
         }
       }
 
-      if (!matches.length && qNorm) {
-        const tokens = qNorm.split(' ').filter(Boolean);
+      if (!matches.length && qAlias) {
+        matches = DATA.filter(r => normalizeAlias(r.nama || '') === qAlias);
+      }
+
+      if (!matches.length && qAlias) {
+        const tokens = qAlias.split(' ').filter(Boolean);
         matches = DATA.filter(r => {
-          const n = normalizeNamaCari(r.nama || '');
-          return tokens.every(t => n.includes(t));
+          const nAlias = normalizeAlias(r.nama || '');
+          return tokens.every(t => nAlias.includes(t));
         });
       }
 
@@ -2450,9 +2464,10 @@ function getPanelClass(sheet) {
         let tarifDisplay = '';
         try {
           if (typeof TARIF_ROWS !== 'undefined' && Array.isArray(TARIF_ROWS) && TARIF_ROWS.length) {
-            const lowerName = (item.nama || '').toLowerCase();
-            const match = TARIF_ROWS.find(r => r.name.toLowerCase() === lowerName)
-              || TARIF_ROWS.find(r => r.name.toLowerCase().includes(lowerName));
+            const aliasName = normalizeAlias(item.nama || '');
+            const match =
+              TARIF_ROWS.find(r => normalizeAlias(r.name) === aliasName) ||
+              TARIF_ROWS.find(r => normalizeAlias(r.name).includes(aliasName));
             if (match && match.el && match.el.cells && match.el.cells[1]) {
               tarifDisplay = (match.el.cells[1].textContent || '').trim();
             }
@@ -2460,6 +2475,7 @@ function getPanelClass(sheet) {
         } catch (e) {
           tarifDisplay = '';
         }
+
         card.innerHTML = `
           <div class="card-header">
             <div class="card-title-block">
@@ -2581,44 +2597,55 @@ function getPanelClass(sheet) {
       });
     }
     function updateSuggestions() {
-      const q = input.value.trim().toLowerCase();
-      if (!DATA.length || q.length < 2) {
-        sugWrap.style.display = 'none';
-        sugWrap.innerHTML = '';
-        return;
-      }
-      const filtered = DATA
-        .filter(item => (item.nama || '').toLowerCase().includes(q))
-        .slice(0, 40);
-      if (!filtered.length) {
-        sugWrap.style.display = 'none';
-        sugWrap.innerHTML = '';
-        return;
-      }
-      const seen = new Set();
-      const rows = [];
-      for (const item of filtered) {
-        const key = item.nama + '|' + item.sheet;
-        if (seen.has(key)) continue;
-        seen.add(key);
-        rows.push(
-          `<div class="suggestion-item" data-name="${escapeHtml(item.nama)}">
-            <span class="suggestion-name">${escapeHtml(item.nama)}</span>
-            <span class="suggestion-panel">${escapeHtml(item.sheet)}</span>
-          </div>`
-        );
-      }
-      sugWrap.innerHTML = rows.join('');
-      sugWrap.style.display = 'block';
-      Array.from(sugWrap.querySelectorAll('.suggestion-item')).forEach(el => {
-        el.addEventListener('click', () => {
-          const name = el.getAttribute('data-name');
-          input.value = name.trim();
-          sugWrap.style.display = 'none';
-          renderDetail(name);
-        });
-      });
-    }
+  const raw = input.value || "";
+  const qAlias = normalizeAlias(raw);
+
+  if (!DATA.length || qAlias.length < 2) {
+    sugWrap.style.display = 'none';
+    sugWrap.innerHTML = '';
+    return;
+  }
+
+  const filtered = DATA
+    .filter(item => {
+      const nAlias = normalizeAlias(item.nama || '');
+      return nAlias.includes(qAlias);
+    })
+    .slice(0, 40);
+
+  if (!filtered.length) {
+    sugWrap.style.display = 'none';
+    sugWrap.innerHTML = '';
+    return;
+  }
+
+  const seen = new Set();
+  const rows = [];
+  filtered.forEach(item => {
+    const key = (item.nama || '') + '|' + (item.sheet || '');
+    if (seen.has(key)) return;
+    seen.add(key);
+    rows.push(
+      `<div class="suggestion-item" data-name="${escapeHtml(item.nama)}">
+        <span class="suggestion-name">${escapeHtml(item.nama)}</span>
+        <span class="suggestion-panel">${escapeHtml(item.sheet)}</span>
+      </div>`
+    );
+  });
+
+  sugWrap.innerHTML = rows.join('');
+  sugWrap.style.display = 'block';
+
+  Array.from(sugWrap.querySelectorAll('.suggestion-item')).forEach(el => {
+    el.addEventListener('click', () => {
+      const name = el.getAttribute('data-name');
+      input.value = name.trim();
+      sugWrap.style.display = 'none';
+      renderDetail(name);
+    });
+  });
+}
+
     input.addEventListener('input', updateSuggestions);
     input.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') {
@@ -2689,61 +2716,79 @@ function getPanelClass(sheet) {
     }
 
     function updateTarifSuggestions() {
-      if (!tarifSearchInput || !tarifSugWrap) return;
-      const q = tarifSearchInput.value.trim().toLowerCase();
-      if (!q || q.length < 2) {
-        tarifSugWrap.style.display = 'none';
-        tarifSugWrap.innerHTML = '';
+  if (!tarifSearchInput || !tarifSugWrap) return;
+
+  const raw = tarifSearchInput.value || "";
+  const qAlias = normalizeAlias(raw);
+
+  if (!qAlias || qAlias.length < 2) {
+    tarifSugWrap.style.display = 'none';
+    tarifSugWrap.innerHTML = '';
+    clearTarifHighlight();
+    return;
+  }
+
+  const filtered = TARIF_ROWS
+    .filter(r => normalizeAlias(r.name).includes(qAlias))
+    .slice(0, 40);
+
+  if (!filtered.length) {
+    tarifSugWrap.style.display = 'none';
+    tarifSugWrap.innerHTML = '';
+    clearTarifHighlight();
+    return;
+  }
+
+  const rows = [];
+  filtered.forEach(r => {
+    rows.push(
+      `<div class="tarif-suggestion-item" data-idx="${r.index}">
+        <span class="tarif-suggestion-name">${escapeHtml(r.name)}</span>
+      </div>`
+    );
+  });
+
+  tarifSugWrap.innerHTML = rows.join('');
+  tarifSugWrap.style.display = 'block';
+
+  Array.from(tarifSugWrap.querySelectorAll('.tarif-suggestion-item')).forEach(el => {
+    el.addEventListener('click', () => {
+      const idx = parseInt(el.getAttribute('data-idx'), 10);
+      const rowObj = TARIF_ROWS.find(r => r.index === idx);
+      if (rowObj) {
+        tarifSearchInput.value = rowObj.name;
+        highlightTarifRow(rowObj);
+      } else {
         clearTarifHighlight();
-        return;
       }
-      const filtered = TARIF_ROWS.filter(r => r.name.toLowerCase().includes(q)).slice(0, 40);
-      if (!filtered.length) {
-        tarifSugWrap.style.display = 'none';
-        tarifSugWrap.innerHTML = '';
-        clearTarifHighlight();
-        return;
-      }
-      const rows = [];
-      filtered.forEach(r => {
-        rows.push(
-          `<div class="tarif-suggestion-item" data-idx="${r.index}">
-            <span class="tarif-suggestion-name">${escapeHtml(r.name)}</span>
-          </div>`
-        );
-      });
-      tarifSugWrap.innerHTML = rows.join('');
-      tarifSugWrap.style.display = 'block';
-      Array.from(tarifSugWrap.querySelectorAll('.tarif-suggestion-item')).forEach(el => {
-        el.addEventListener('click', () => {
-          const idx = parseInt(el.getAttribute('data-idx'), 10);
-          const rowObj = TARIF_ROWS.find(r => r.index === idx);
-          if (rowObj) {
-            tarifSearchInput.value = rowObj.name;
-            highlightTarifRow(rowObj);
-          }
-          tarifSugWrap.style.display = 'none';
-        });
-      });
-    }
+      tarifSugWrap.style.display = 'none';
+    });
+  });
+}
+
 
     
     function jumpToTarifByName(testName) {
-      if (!tarifSearchInput || !TARIF_ROWS.length) return;
-      const q = (testName || '').trim();
-      if (!q) return;
-      tarifSearchInput.value = q;
-      const lower = q.toLowerCase();
-      const exact = TARIF_ROWS.find(r => r.name.toLowerCase() === lower);
-      const first = exact || TARIF_ROWS.find(r => r.name.toLowerCase().includes(lower));
-      if (first) {
-        highlightTarifRow(first);
-      } else {
-        // Kalau nama tes tidak ada di daftar tarif,
-        // reset tabel ke kondisi awal (semua baris tampil, tanpa highlight)
-        clearTarifHighlight();
-      }
-    }
+  if (!tarifSearchInput || !TARIF_ROWS.length) return;
+
+  const raw = (testName || '').trim();
+  if (!raw) return;
+
+  tarifSearchInput.value = raw;
+
+  const qAlias = normalizeAlias(raw);
+  const exact = TARIF_ROWS.find(r => normalizeAlias(r.name) === qAlias);
+  const first = exact || TARIF_ROWS.find(r => normalizeAlias(r.name).includes(qAlias));
+
+  if (first) {
+    highlightTarifRow(first);
+  } else {
+    // Kalau nama tes tidak ada di daftar tarif,
+    // reset tabel ke kondisi awal (semua baris tampil, tanpa highlight)
+    clearTarifHighlight();
+  }
+}
+
 
     // Klik link "Lihat di tabel tarif" di kartu: langsung cari dan highlight tarif
     if (detailArea) {
@@ -2772,21 +2817,27 @@ function getPanelClass(sheet) {
     }
 
 if (tarifSearchInput) {
-      tarifSearchInput.addEventListener('input', updateTarifSuggestions);
-      tarifSearchInput.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') {
-          e.preventDefault();
-          const q = tarifSearchInput.value.trim().toLowerCase();
-          if (!q) return;
-          const exact = TARIF_ROWS.find(r => r.name.toLowerCase() === q);
-          const first = exact || TARIF_ROWS.find(r => r.name.toLowerCase().includes(q));
-          if (first) {
-            highlightTarifRow(first);
-          }
-          tarifSugWrap.style.display = 'none';
-        }
-      });
+  tarifSearchInput.addEventListener('input', updateTarifSuggestions);
+  tarifSearchInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      const raw = tarifSearchInput.value || "";
+      const qAlias = normalizeAlias(raw);
+      if (!qAlias) return;
+
+      const exact = TARIF_ROWS.find(r => normalizeAlias(r.name) === qAlias);
+      const first = exact || TARIF_ROWS.find(r => normalizeAlias(r.name).includes(qAlias));
+
+      if (first) {
+        highlightTarifRow(first);
+      } else {
+        clearTarifHighlight();
+      }
+      tarifSugWrap.style.display = 'none';
     }
+  });
+}
+
 
   </script>
 
