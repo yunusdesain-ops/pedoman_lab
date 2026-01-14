@@ -241,6 +241,16 @@ body {
   border:1px solid #eee;
   border-radius:12px;
 }
+.tatPickedName{
+  font-weight:700;
+  font-size:16px;
+  margin:8px 12px 0 12px;
+}
+.tatPickedSub{
+  color:#666;
+  font-size:12px;
+  margin:2px 12px 10px 12px;
+}
 .tatTable{
   width:100%;
   border-collapse:collapse;
@@ -521,19 +531,23 @@ function setActiveTab() {
 tabPed.addEventListener("click", function() {
   MODE = "pedoman";
   setActiveTab();
+  runSearch();
 });
 tabTar.addEventListener("click", function() {
   MODE = "tarif";
   setActiveTab();
+  runSearch();
 });
 tabTAT.addEventListener("click", function() {
   MODE = "tat";
   setActiveTab();
+  runSearch();
 });
 
 tabSup.addEventListener("click", function() {
   MODE = "support";
   setActiveTab();
+  runSearch();
 });
 
 s.addEventListener("input", function() {
@@ -934,18 +948,21 @@ function renderTatGrouped(list) {
   let html = "";
   html += "<div class='card'>";
   html += "<div class='sec-title'>Daftar Hari Kerja</div>";
+  if (list && list.length) {
+    const nm = (list[0].nama || "");
+    const tp0 = (list[0].tempat || "");
+    html += "<div class='tatPickedName'>" + esc(nm) + "</div>";
+    if (tp0) html += "<div class='tatPickedSub'>" + esc(tp0) + "</div>";
+  }
   html += "<div class='tableWrap'>";
   html += "<table class='tatTable'><thead><tr>";
-  html += "<th>Nama tes</th><th>Jadwal proses</th><th>Hasil keluar</th><th>Aturan</th>";
+  html += "<th>Jadwal proses</th><th>Hasil keluar</th><th>Aturan</th>";
   html += "</tr></thead><tbody>";
 
   rows.forEach(function(r) {
     const tempat = (r.d.tempat || "");
     const hs = (r.hs || "-");
     html += "<tr class='tatRow' data-idx='" + r.idx + "'>";
-    html += "<td><div class='itemName'>" + esc(r.d.nama) + "</div>" +
-            (tempat ? "<div class='itemSub'>" + esc(tempat) + "</div>" : "") +
-            "</td>";
     html += "<td>" + esc(r.day) + "</td>";
     html += "<td>" + esc(hs) + "</td>";
     html += "<td>" + esc(r.rule || ("Jika proses " + r.day + " → hasil " + hs)) + "</td>";
@@ -972,6 +989,10 @@ function hookTatGrouped(list) {
   });
 }
 
+
+// init on first load
+setActiveTab();
+runSearch();
 </script>
 
 </body>
